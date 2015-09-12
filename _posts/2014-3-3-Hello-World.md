@@ -5,7 +5,7 @@ title: Grouping classes and relationships to Django models
 
 Recently i came across few use cases where need to link python classes to database models in django project. I solved this issue by creating a new model for each group of class
 
-```
+```python
 class JsonSerializer(object):
    ...
 
@@ -20,13 +20,13 @@ Serializer.objects.get_or_create(name="json", classpath="serializer.JsonSerializ
 ```
 Accessing the serializer
 
-```
+```python
 >>> serializer = Serializer.objects.get("json").get_class()()
 >>> serializer.serialize(data)
 ```
 But with this solution i need either fixtures or need to call get_or_create for each Serializer class. Better way will be group all class with same base class instead of creating a model for them.
 
-```
+```python
 class CollectionMeta(type):
     def __new__(cls, name, bases, dct):
         # filter base classes with metaclass CollectionMeta
@@ -60,12 +60,12 @@ class Json(Serializer):
 ```
 Accessing the serializer
 
-```
+```python
 >>> Serializer.objects['Json'].serialize(data)
 ```
 But previous solution's serializer can be used as foreign key in other models. Using Custom model field same functionality can be simulated.
 
-```
+```python
 class CollectionField(models.CharField):
     def __init__(self, classvar=None, **kwargs):
         if classvar:
