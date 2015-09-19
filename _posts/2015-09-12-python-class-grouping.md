@@ -1,47 +1,81 @@
 ---
 layout: post
-title: Grouping classes and relationships to Django models
+title: Metaclass to Group subclass and relationships to Django models
 ---
 
-Recently i came across few use cases where need to group python classes. Let's look into case where i need a group for serializers. All of the serializer have common methods and attributes. So i choose to create a baseclass `Serializer` and inherit all other serializer(CSVSerilizer, JSONSerializer) from it. But what i really nead was `Serializer` objects with different methods. To do that i could pass these methods as arguments to `__init__` and add it to object's `__dict__`. But the code will be less readable than inheritance. I decided to use metaclass so i can write inheritive classes with baseclass with a list of each subclass object.
 
 {% gist b04deddd5f7a7766c00b %}
 
-This class needs to be set as metaclass for baseclass. This metaclass create object of subclass instead of class as store it in baseclass
+Using this class as metaclass in baseclass, you can retrieve subclasses from baseclass. Below example is in python 3. For python 2 instead of `metaclass=Container` user `__metaclass__ = Container` inside class like a class variable.
 
-```python
-class Serializer(metaclass=CollectionMeta):
+{% highlight python %}
+from .utils import Container
+
+
+class Verb(metaclass=Container):
     def __str__(self):
+        # this is needed for admin interface to work
+        # for python 2 use `__unicode__`
         return self.name
-    def serialize(self):
-        raise NotImplementedError
+    def __init__(self, *args, **kwargs):
+        return None
+    def execute(self, *args, **kwargs):
+        return None
 
-class Json(Serializer):
-    def serialize(self, data):
-        return json.dumps(data)
+class Create(Verb):
+    def execute(self, **kwargs):
+        print("creating something")
+
+class SendEmail(Verb):
+    def execute(self, **kwargs):
+        print("sending email")
 
 
-In [3]: Serializer.objects.get('Json')
-Out[3]: <app.serializer.Json at 0xb668184c>
+In [1]: from myapp.verbs import Verb
 
-In [4]: Serializer.objects['Json'].serialize({"name": "ashwin"})
-Out[4]: '{"name": "ashwin"}'
-```
+In [2]: Verb.objects['create']
+Out[2]: myapp.verbs.Create
+
+In [3]: Verb.objects['create']().execute()
+creating something
+
+In [4]: Verb.objects['sendemail']().execute()
+sending email
+
+{% endhighlight %}
 
 It is also possible to use this baseclass like foriegn key to django model by using a custom django model field.
 
 {% gist 10b15a81b0d2a1e4e554 %}
 
-```python
-class UserSerializer(models.Model):
+{% highlight python %}
+from django.db import models
+from .utils import ContainerField
+from .verbs import Verb
+from django.contrib.auth.models import User
+
+
+class UserVerb(models.Model):
     user = models.ForeignKey(User)
-    serializer = ContainerField(classvar=Serializer, max_length=20)
+    verb = ContainerField(classvar=Verb, max_length=20)
 
+In [1]: from myapp.models import UserVerb
 
-In [4]: s = UserSerializer.objects.get(id=1)
+In [2]: from myapp.verbs import Verb
 
-In [5]: s.serializer
-Out[5]: <app.serializer.Json at 0xb6654fcc>
-In [6]: s.serializer.serialize({"name": s.user.username})
-Out[6]: '{"name": "ashwin"}'
-```
+In [3]: from django.contrib.auth.models import User
+
+In [4]: me = User.objects.get()
+
+In [5]: from myapp.verbs import SendEmail
+
+In [6]: userverb = UserVerb.objects.create(user=me, verb=SendEmail.name)
+
+In [7]: userverb = UserVerb.objects.get(verb=SendEmail.name)
+
+In [8]: userverb.verb().execute()
+sending email
+
+{% endhighlight %}
+
+Entire implementation is a little bizarre(or is it. I am not sure about that). I am thinking about implementing this in a project. Currently i am handling these situations by creating a new model for each baseclass to store name of each subclass and import that class by that name. This solution seems elegant than current one. Please share your thoughts and leave a comment. 
